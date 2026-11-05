@@ -351,3 +351,25 @@ start.bat 会自动检测并结束占用 8080 / 5173 的进程，无需手工处
 4. 访问 /api/v1/health，看 llm.configured 是否为 	rue
 5. 若为 alse，说明 Key 没被读到——检查系统环境变量或文件路径
 
+---
+
+## 十二、代码托管（GitHub / Gitee 双平台）
+
+| 平台 | 地址 |
+|---|---|
+| GitHub | https://github.com/gxhyj666-png/dwgmind |
+| Gitee | https://gitee.com/gxhyj66/dwgmind |
+
+### 同步方式
+
+```bat
+:: 一键推送两个平台
+push-all.bat
+
+:: 或手工分别推送
+git push origin main   :: GitHub
+git push gitee main    :: Gitee
+```
+
+> 两个远程都指向同一个 `main` 分支，提交哈希保持一致。
+> 若某平台推送失败（网络问题），单独重试对应命令即可，不影响另一平台。
