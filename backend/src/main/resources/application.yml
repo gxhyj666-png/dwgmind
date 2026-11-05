@@ -1,0 +1,70 @@
+﻿server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: dwgmind
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:dwgmind}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${DB_USER:root}
+    password: "${DB_PASSWORD:123456}"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3s
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+dwgmind:
+  upload-dir: ${UPLOAD_DIR:C:/Users/86180/Desktop/dwgmind/uploads}
+  # -------- LLM 配置（可选增强；不配也能完整运行）--------
+  llm:
+    enabled: ${LLM_ENABLED:true}
+    # deepseek | dashscope | none
+    provider: ${LLM_PROVIDER:deepseek}
+    base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:deepseek-chat}
+    vision-model: ${LLM_VISION_MODEL:}
+    timeout-seconds: 30
+  # -------- Python 几何边车（可选）--------
+  sidecar:
+    enabled: ${SIDECAR_ENABLED:false}
+    base-url: ${SIDECAR_BASE_URL:http://127.0.0.1:8100}
+  # -------- 限流 --------
+  rate-limit:
+    enabled: true
+    per-minute: 120
+
+logging:
+  level:
+    root: info
+    com.dwgmind: info
+

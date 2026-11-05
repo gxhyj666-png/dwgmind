@@ -1,0 +1,21 @@
+﻿# 本机敏感配置，禁止提交
+llm.local.env
+*.local.env
+.env
+
+# 构建与运行时产物
+backend/target/
+frontend/node_modules/
+uploads/*
+!uploads/.gitkeep
+
+# IDE / 临时文件
+.idea/
+.vscode/
+*.log
+.edge-*/
+
+# 运行日志
+backend/logs-*.txt
+backend/backend-runtime*.log
+frontend/logs-*.txt

@@ -1,0 +1,525 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>图语者 DwgMind · 工业图纸语义引擎</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f8cff'/><text x='50' y='68' font-size='56' text-anchor='middle' fill='white' font-family='sans-serif'>图</text></svg>">
+    <!-- PWA：可添加到手机桌面，独立窗口运行 -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#131a2a">
+    <meta name="application-name" content="DwgMind">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DwgMind">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="/vendor/element-plus.css">
+    <style>
+        * { box-sizing: border-box; }
+        html, body, #app { height: 100%; margin: 0; }
+        body {
+            font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #0f1420;
+            color: #e6ebf5;
+            overflow: hidden;
+        }
+        /* ---------- 顶栏 ---------- */
+        .topbar {
+            height: 56px; display: flex; align-items: center; padding: 0 18px;
+            background: linear-gradient(90deg, #131a2a 0%, #1a2338 100%);
+            border-bottom: 1px solid #24304a; gap: 16px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+        .brand .logo {
+            width: 28px; height: 28px; border-radius: 8px;
+            background: linear-gradient(135deg, #4f8cff, #7c5cff);
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .brand small { font-weight: 400; font-size: 12px; color: #8ba0c4; margin-left: 6px; }
+        .status-chips { display: flex; gap: 8px; margin-left: auto; }
+        .chip {
+            font-size: 12px; padding: 4px 10px; border-radius: 20px;
+            background: #1c2740; color: #9fb3d4; border: 1px solid #2a3a5c;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: #f0b429; }
+        .dot.up { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+        .dot.down { background: #e74c3c; }
+        /* ---------- 主体 ---------- */
+        .main { display: flex; height: calc(100% - 56px); }
+        .sidebar {
+            width: 300px; background: #131a2a; border-right: 1px solid #24304a;
+            display: flex; flex-direction: column; padding: 14px; gap: 12px; overflow-y: auto;
+        }
+        .stage { flex: 1; display: flex; flex-direction: column; background: #0b0f18; position: relative; min-width: 0; }
+        .inspector {
+            width: 400px; background: #131a2a; border-left: 1px solid #24304a;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .panel-title {
+            font-size: 13px; font-weight: 600; color: #9fb3d4; letter-spacing: .5px;
+            text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+        }
+        .panel-title::before {
+            content: ''; width: 3px; height: 12px; border-radius: 2px;
+            background: linear-gradient(180deg, #4f8cff, #7c5cff);
+        }
+        /* ---------- 上传区 ---------- */
+        .dropzone {
+            border: 2px dashed #2f4470; border-radius: 12px; padding: 22px 14px; text-align: center;
+            cursor: pointer; transition: all .2s; background: #101828;
+        }
+        .dropzone:hover, .dropzone.dragover { border-color: #4f8cff; background: #14203a; }
+        .dropzone .big { font-size: 30px; margin-bottom: 8px; }
+        .dropzone .t1 { font-size: 14px; color: #cfe0ff; font-weight: 600; }
+        .dropzone .t2 { font-size: 12px; color: #7d91b3; margin-top: 6px; line-height: 1.6; }
+        /* ---------- 画布 ---------- */
+        .canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+        #dwg-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+        #dwg-canvas.dragging { cursor: grabbing; }
+        .canvas-empty {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: #5f7194; gap: 10px; pointer-events: none;
+        }
+        .canvas-empty .hint-big { font-size: 15px; color: #8ba0c4; }
+        .canvas-toolbar {
+            position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 5;
+        }
+        .canvas-legend {
+            position: absolute; left: 12px; bottom: 12px; display: flex; gap: 12px;
+            background: rgba(19, 26, 42, .88); border: 1px solid #2a3a5c; border-radius: 8px;
+            padding: 7px 12px; font-size: 11px; color: #9fb3d4; z-index: 5;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-swatch { width: 10px; height: 10px; border-radius: 2px; }
+        /* ---------- 进度条 ---------- */
+        .progress-box {
+            position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+            width: 62%; background: rgba(19, 26, 42, .96); border: 1px solid #2a3a5c;
+            border-radius: 12px; padding: 14px 18px; z-index: 10;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+        }
+        .progress-stage { font-size: 12px; color: #8ba0c4; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        /* ---------- 结论卡片 ---------- */
+        .tabs { display: flex; border-bottom: 1px solid #24304a; flex: none; }
+        .tab {
+            flex: 1; text-align: center; padding: 11px 4px; font-size: 13px; color: #8ba0c4;
+            cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
+        }
+        .tab:hover { color: #cfe0ff; background: #16203a; }
+        .tab.active { color: #6fa0ff; border-bottom-color: #4f8cff; font-weight: 600; background: #16203a; }
+        .tab .badge { font-size: 10px; background: #2a3a5c; border-radius: 8px; padding: 1px 5px; margin-left: 4px; }
+        .list-scroll { flex: 1; overflow-y: auto; padding: 12px; }
+        .conc-card {
+            background: #16203a; border: 1px solid #253352; border-left: 3px solid #4f8cff;
+            border-radius: 8px; padding: 10px 12px; margin-bottom: 9px; cursor: pointer;
+            transition: all .15s;
+        }
+        .conc-card:hover { background: #1b2848; border-color: #3a5c9c; transform: translateX(2px); }
+        .conc-card.selected { background: #1e2c52; border-color: #6fa0ff; box-shadow: 0 0 0 1px #4f8cff inset; }
+        .conc-card.pending { border-left-color: #f0b429; }
+        .conc-card.llm { border-left-color: #7c5cff; }
+        .conc-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: #dbe7ff; margin-bottom: 5px; }
+        .conc-body { font-size: 12px; color: #93a7c9; line-height: 1.65; }
+        .conc-foot { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .tag-mini { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: #22304f; color: #8fb0dd; }
+        .tag-mini.warn { background: #3d2f13; color: #f0b429; }
+        .tag-mini.ok { background: #143d2a; color: #2ecc71; }
+        .tag-mini.llm { background: #2a2150; color: #a48cff; }
+        .empty-tip { text-align: center; color: #5f7194; font-size: 12px; padding: 30px 10px; line-height: 1.8; }
+        /* ---------- 榜单 ---------- */
+        .lb-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 12px; }
+        .lb-row:nth-child(odd) { background: #16203a; }
+        .lb-rank { width: 22px; height: 22px; border-radius: 6px; background: #22304f; color: #9fb3d4; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; }
+        .lb-rank.top1 { background: #4a3a10; color: #f0b429; }
+        .lb-rank.top2 { background: #2f3a4a; color: #c0ccdd; }
+        .lb-rank.top3 { background: #3a2a1a; color: #d08a4a; }
+        /* ---------- Q&A ---------- */
+        .qa-box { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .qa-input-area {
+            flex: none; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 9px;
+            border-bottom: 1px solid #1f2a44;
+        }
+        /* 结果区：独立滚动容器。父级必须是 min-height:0 的 flex 子项，
+           否则 flex 布局会撑开而不是出现滚动条（此前"滚轮滑不动"的根因） */
+        .qa-result-area {
+            flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+            padding: 12px; -webkit-overflow-scrolling: touch;
+        }
+        .qa-answer {
+            background: #16203a; border: 1px solid #253352; border-radius: 8px;
+            padding: 11px; font-size: 12px; line-height: 1.75; color: #a8bcdd;
+            white-space: pre-wrap; word-break: break-word;
+        }
+        .qa-meta { font-size: 11px; color: #6fa0ff; margin-bottom: 6px; }
+        .qa-hint { padding: 12px 2px 2px; font-size: 11px; color: #5f7194; line-height: 1.8; }
+        .history-item { font-size: 12px; color: #8ba0c4; padding: 8px 10px; border-radius: 6px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+        .history-item:hover { background: #1b2848; }
+        .history-item .dot-sep { width: 6px; height: 6px; border-radius: 50%; background: #4f8cff; flex: none; }
+        /* ---------- 细滚动条 ---------- */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #2a3a5c; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a527e; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        /* Element Plus 暗色适配 */
+        .el-upload-dragger { background: transparent !important; border: none !important; padding: 0 !important; }
+        .el-message-box, .el-dialog { background: #16203a !important; border: 1px solid #2a3a5c; }
+        .el-dialog__title { color: #dbe7ff !important; }
+        .el-message-box__content, .el-dialog__body { color: #a8bcdd !important; }
+
+        /* ================= 移动端 / PWA ================= */
+        /* 移动端专用控件默认隐藏，由媒体查询开启 */
+        .mobile-nav, .mobile-backdrop, .mobile-only { display: none; }
+        .drawer-close { display: none; }
+
+        /* 安全区（刘海屏 / 底部手势条） */
+        .topbar { padding-top: env(safe-area-inset-top); }
+        .mobile-nav { padding-bottom: env(safe-area-inset-bottom); }
+
+        @media (max-width: 900px) {
+            /* 顶栏紧凑化：只留品牌 + 状态点 */
+            .topbar { height: 50px; padding: 0 10px; gap: 8px; }
+            .brand { font-size: 15px; }
+            .brand .logo { width: 24px; height: 24px; font-size: 13px; }
+            .brand small { display: none; }
+            .status-chips { gap: 5px; }
+            .chip { font-size: 10px; padding: 3px 6px; }
+            .chip-label { display: none; }          /* 只留状态圆点，省横向空间 */
+
+            /* 主区：画布占满，左右两栏改为抽屉 / 底部面板 */
+            .main { height: calc(100% - 50px - 52px); }
+
+            .sidebar {
+                position: fixed; left: 0; top: 0; bottom: 0; z-index: 60;
+                width: min(86vw, 340px); height: 100%;
+                transform: translateX(-102%); transition: transform .25s ease;
+                box-shadow: 8px 0 30px rgba(0,0,0,.5);
+                padding-top: calc(env(safe-area-inset-top) + 12px);
+                padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+            }
+            .sidebar.open { transform: translateX(0); }
+
+            .inspector {
+                position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+                width: 100%; height: 72vh; max-height: 72vh;
+                border-left: none; border-top: 1px solid #2a3a5c;
+                border-radius: 14px 14px 0 0;
+                transform: translateY(102%); transition: transform .25s ease;
+                box-shadow: 0 -8px 30px rgba(0,0,0,.5);
+                padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
+            }
+            .inspector.open { transform: translateY(0); }
+
+            /* 抽屉 / 面板的半透明遮罩 */
+            .mobile-backdrop {
+                display: block; position: fixed; inset: 0; z-index: 55;
+                background: rgba(0,0,0,.55); backdrop-filter: blur(2px);
+            }
+
+            /* 抽屉 / 面板顶部的关闭条 */
+            .drawer-close {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 10px 14px 12px; color: #cfe0ff; font-size: 13px; font-weight: 600;
+                border-bottom: 1px solid #1f2a44; cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            /* 底部导航 */
+            .mobile-nav {
+                display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+                height: calc(52px + env(safe-area-inset-bottom));
+                background: #131a2a; border-top: 1px solid #2a3a5c;
+            }
+            .mobile-nav button {
+                flex: 1; background: none; border: none; color: #8ba0c4;
+                font-size: 11px; font-family: inherit; cursor: pointer;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                gap: 2px; padding: 0; -webkit-tap-highlight-color: transparent;
+            }
+            .mobile-nav button .ico { font-size: 17px; line-height: 1; }
+            .mobile-nav button.active { color: #6fa0ff; background: #16203a; }
+            .mobile-nav button .badge-dot {
+                position: absolute; transform: translate(14px, -10px);
+                min-width: 15px; height: 15px; line-height: 15px; padding: 0 3px;
+                border-radius: 8px; background: #e0533d; color: #fff; font-size: 9px;
+            }
+
+            /* 画布工具栏在手机上更小、位置避开刘海 */
+            .canvas-toolbar { top: 8px; right: 8px; }
+            .canvas-toolbar .el-button { padding: 5px 9px; font-size: 12px; }
+            .canvas-legend {
+                left: 8px; bottom: 8px; font-size: 10px; padding: 5px 8px; gap: 8px;
+                max-width: calc(100% - 16px); flex-wrap: wrap;
+            }
+            .progress-box { width: calc(100% - 24px); bottom: 12px; padding: 11px 13px; }
+
+            /* 结论卡片加大触摸区域 */
+            .conc-card { padding: 12px 13px; margin-bottom: 10px; }
+            .tabs { position: sticky; top: 0; background: #131a2a; z-index: 2; }
+            .tab { padding: 13px 4px; font-size: 13px; }
+            .list-scroll { padding: 10px; }
+
+            /* 弹窗适配窄屏 */
+            .el-dialog { width: 92vw !important; }
+            .el-message { min-width: 0; width: 90vw; }
+        }
+
+        /* 横屏矮屏（如手机横置看图纸）：面板降到 60vh */
+        @media (max-width: 900px) and (max-height: 480px) {
+            .inspector { height: 88vh; max-height: 88vh; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="topbar">
+        <div class="brand">
+            <div class="logo">图</div>
+            <span>图语者 DwgMind</span>
+            <small>工业图纸语义引擎</small>
+        </div>
+        <div class="status-chips">
+            <div class="chip"><span class="dot" :class="health.database==='UP'?'up':'down'"></span><span class="chip-label">MySQL {{ health.database }}</span></div>
+            <div class="chip"><span class="dot" :class="health.redis==='UP'?'up':'down'"></span><span class="chip-label">Redis {{ health.redis }}</span></div>
+            <div class="chip"><span class="dot" :class="llmReady?'up':''"></span><span class="chip-label">{{ llmReady ? 'LLM 增强' : '规则引擎' }}</span></div>
+            <div class="chip" @click="showAbout=true" style="cursor:pointer">能力清单</div>
+        </div>
+    </div>
+
+    <!-- 移动端遮罩：点击关闭抽屉/面板 -->
+    <div class="mobile-backdrop" v-if="drawerOpen || panelOpen" @click="closeMobileOverlays"></div>
+
+    <div class="main">
+        <!-- 左侧：上传 + 历史（手机上为左侧抽屉） -->
+        <div class="sidebar" :class="{open: drawerOpen}">
+            <div class="drawer-close" @click="drawerOpen=false">
+                <span>图纸与上传</span><span style="font-size:18px">✕</span>
+            </div>
+            <div class="panel-title">上传图纸</div>
+            <div class="dropzone" :class="{dragover: dragOver}"
+                 @click="$refs.fileInput.click()"
+                 @dragover.prevent="dragOver=true"
+                 @dragleave.prevent="dragOver=false"
+                 @drop.prevent="onDrop">
+                <div class="big">📐</div>
+                <div class="t1">点击或拖拽图纸到这里</div>
+                <div class="t2">支持 DXF / PNG / JPG<br>上传后自动解析并生成语义结论</div>
+            </div>
+            <input ref="fileInput" type="file" style="display:none" accept=".dxf,.png,.jpg,.jpeg,.bmp,.pdf,.dwg" @change="onPick">
+
+            <div style="display:flex;gap:8px">
+                <el-button size="small" style="flex:1" @click="loadSample">载入示例图</el-button>
+                <el-button size="small" style="flex:1" @click="refreshAll">刷新</el-button>
+            </div>
+
+            <div class="panel-title" style="margin-top:6px">历史图纸</div>
+            <div style="flex:1;overflow-y:auto">
+                <div v-if="!drawings.length" class="empty-tip">还没有图纸<br>上传一张开始</div>
+                <div v-for="d in drawings" :key="d.id" class="history-item" @click="openDrawing(d.id)">
+                    <span class="dot-sep"></span>
+                    <div style="flex:1;min-width:0">
+                        <div style="color:#cfe0ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.fileName }}</div>
+                        <div style="font-size:11px;color:#6b7fa3;margin-top:2px">
+                            #{{ d.id }} · {{ d.entityCount || 0 }} 图元 · {{ d.conclusionCount || 0 }} 结论
+                        </div>
+                    </div>
+                    <el-tag size="small" :type="d.status==='PARSED'?'success':(d.status==='FAILED'?'danger':'warning')">
+                        {{ d.status }}
+                    </el-tag>
+                </div>
+            </div>
+
+            <div class="panel-title">实时榜单</div>
+            <div style="max-height:150px;overflow-y:auto">
+                <div v-for="item in leaderboard" :key="item.rank" class="lb-row">
+                    <div class="lb-rank" :class="'top'+item.rank">{{ item.rank }}</div>
+                    <div style="flex:1;color:#cfe0ff">{{ item.team }}</div>
+                    <div style="color:#6fa0ff;font-weight:700">{{ item.score }}</div>
+                </div>
+                <div v-if="!leaderboard.length" class="empty-tip">榜单为空，解析一次即可上榜</div>
+            </div>
+        </div>
+
+        <!-- 中间：画布 -->
+        <div class="stage">
+            <div class="canvas-wrap" ref="canvasWrap">
+                <canvas id="dwg-canvas"></canvas>
+                <div class="canvas-empty" v-if="!current">
+                    <div style="font-size:48px;opacity:.35">🗺️</div>
+                    <div class="hint-big">上传图纸后，语义图层将在这里展开</div>
+                    <div style="font-size:12px">每个结论都能在图纸上高亮出它的出处</div>
+                </div>
+                <div class="canvas-toolbar" v-if="current">
+                    <el-button size="small" @click="zoomBy(1.2)">＋</el-button>
+                    <el-button size="small" @click="zoomBy(0.8)">－</el-button>
+                    <el-button size="small" @click="fitView">适应</el-button>
+                </div>
+                <div class="canvas-legend" v-if="current">
+                    <div class="legend-item"><span class="legend-swatch" style="background:#4f8cff"></span>图元</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background:#f0b429"></span>待复核</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background:#2ecc71"></span>已确认</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background:#7c5cff"></span>大模型结论</div>
+                </div>
+
+                <div class="progress-box" v-if="parsing">
+                    <div class="progress-stage">
+                        <span>{{ progressMessage || '解析中…' }}</span>
+                        <span>{{ progressPercent }}%</span>
+                    </div>
+                    <el-progress :percentage="progressPercent" :stroke-width="7" :show-text="false"
+                                 color="#4f8cff"></el-progress>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：语义结果（手机上为底部上滑面板） -->
+        <div class="inspector" :class="{open: panelOpen}">
+            <div class="drawer-close" @click="panelOpen=false">
+                <span>语义面板</span><span style="font-size:18px">✕</span>
+            </div>
+            <div class="tabs">
+                <div class="tab" :class="{active: tab==='conclusions'}" @click="tab='conclusions'">
+                    结论<span class="badge">{{ inferences.length }}</span>
+                </div>
+                <div class="tab" :class="{active: tab==='review'}" @click="tab='review'">
+                    复核<span class="badge">{{ reviewQueue.length }}</span>
+                </div>
+                <div class="tab" :class="{active: tab==='bom'}" @click="tab='bom'">
+                    BOM<span class="badge">{{ bom.length }}</span>
+                </div>
+                <div class="tab" :class="{active: tab==='qa'}" @click="tab='qa'">问答</div>
+            </div>
+
+            <!-- 结论 -->
+            <div class="list-scroll" v-if="tab==='conclusions'">
+                <div v-if="!inferences.length" class="empty-tip">
+                    暂无语义结论<br>解析完成后，这里会列出每条结论及其溯源
+                </div>
+                <div v-for="inf in inferences" :key="inf.id" class="conc-card"
+                     :class="{selected: selectedInference && selectedInference.id===inf.id,
+                              pending: inf.reviewStatus==='PENDING_REVIEW',
+                              llm: inf.engine==='LLM'}"
+                     @click="selectInference(inf)">
+                    <div class="conc-head">
+                        <span>{{ inf.title }}</span>
+                        <span style="font-size:11px;color:#8ba0c4">{{ (inf.confidence*100).toFixed(0) }}%</span>
+                    </div>
+                    <div class="conc-body">{{ inf.content }}</div>
+                    <div class="conc-foot">
+                        <span class="tag-mini">{{ typeName(inf.conclusionType) }}</span>
+                        <span class="tag-mini" :class="statusClass(inf.reviewStatus)">{{ statusName(inf.reviewStatus) }}</span>
+                        <span class="tag-mini llm" v-if="inf.engine==='LLM'">大模型</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 复核 -->
+            <div class="list-scroll" v-if="tab==='review'">
+                <div v-if="!reviewQueue.length" class="empty-tip">
+                    🎉 复核队列为空<br>所有结论置信度都达标
+                </div>
+                <div v-for="inf in reviewQueue" :key="inf.id" class="conc-card pending" @click="selectInference(inf)">
+                    <div class="conc-head">
+                        <span>{{ inf.title }}</span>
+                        <span style="font-size:11px;color:#f0b429">{{ (inf.confidence*100).toFixed(0) }}%</span>
+                    </div>
+                    <div class="conc-body">{{ inf.content }}</div>
+                    <div class="conc-foot">
+                        <el-button size="small" type="success" @click.stop="doReview(inf,'CONFIRM')">确认</el-button>
+                        <el-button size="small" type="warning" @click.stop="openCorrect(inf)">修正</el-button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOM -->
+            <div class="list-scroll" v-if="tab==='bom'">
+                <div v-if="!bom.length" class="empty-tip">暂无 BOM 条目</div>
+                <el-table v-else :data="bom" size="small" style="width:100%"
+                          :header-cell-style="{background:'#1b2848',color:'#9fb3d4',borderColor:'#253352'}"
+                          :cell-style="{background:'#131a2a',color:'#a8bcdd',borderColor:'#1f2a44'}">
+                    <el-table-column prop="partName" label="零件" width="82"></el-table-column>
+                    <el-table-column prop="summary" label="摘要" show-overflow-tooltip></el-table-column>
+                    <el-table-column prop="conclusionCount" label="结论数" width="72" align="center"></el-table-column>
+                </el-table>
+            </div>
+
+            <!-- 问答 -->
+            <div v-if="tab==='qa'" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+                <!-- 输入区固定，不随结果滚动 -->
+                <div class="qa-input-area">
+                    <el-input v-model="question" placeholder="例如：汇总此工程图情况 / 有几个零件？有哪些孔位？"
+                              @keyup.enter="ask" size="default"></el-input>
+                    <el-button type="primary" @click="ask" :loading="asking">提问（基于图纸语义结论）</el-button>
+                </div>
+                <!-- 结果区独立滚动：长回答也能滚轮下滑 -->
+                <div class="qa-result-area" ref="qaResultRef">
+                    <div class="qa-answer" v-if="answer">
+                        <div class="qa-meta">
+                            引擎：{{ answerEngine }} · 命中 {{ answerCitations }} 条结论
+                        </div>
+                        {{ answer }}
+                    </div>
+                    <div v-else class="empty-tip" style="padding:16px 4px">
+                        输入问题后，语义结论的检索与汇总结果会显示在这里。
+                    </div>
+                    <div class="qa-hint">
+                        {{ llmReady
+                            ? '已接入大模型：普通问题由大模型基于语义结论推理作答；「汇总 / 总结 / 概况」类问题直接输出结构化工程图概况。'
+                            : '未配置 LLM_API_KEY，当前为纯规则引擎：问答为关键词检索 + 统计应答。' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动端底部导航 -->
+    <div class="mobile-nav">
+        <button :class="{active: drawerOpen}" @click="toggleDrawer">
+            <span class="ico">📁</span>
+            <span>图纸</span>
+        </button>
+        <button @click="fitView">
+            <span class="ico">🎯</span>
+            <span>适应</span>
+        </button>
+        <button :class="{active: panelOpen}" @click="togglePanel">
+            <span class="ico">🧠</span>
+            <span>语义</span>
+            <span class="badge-dot" v-if="reviewQueue.length">{{ reviewQueue.length }}</span>
+        </button>
+    </div>
+
+    <!-- 修正弹窗 -->
+    <el-dialog v-model="correctDialog" title="人工修正结论" width="460px">
+        <el-input v-model="correctText" type="textarea" :rows="4" placeholder="请输入修正后的结论内容"></el-input>
+        <template #footer>
+            <el-button @click="correctDialog=false">取消</el-button>
+            <el-button type="primary" @click="submitCorrect">提交并回流样本</el-button>
+        </template>
+    </el-dialog>
+
+    <!-- 能力清单 -->
+    <el-dialog v-model="showAbout" title="系统能力与运行状态" width="560px">
+        <div style="font-size:13px;line-height:2;color:#a8bcdd">
+            <div><b style="color:#cfe0ff">已就绪：</b>{{ (health.capabilities||[]).join(' · ') }}</div>
+            <div style="margin-top:10px"><b style="color:#cfe0ff">LLM：</b>{{ (health.llm||{}).hint }}</div>
+            <div><b style="color:#cfe0ff">几何边车：</b>{{ (health.sidecar||{}).enabled ? '已启用' : '未启用（Java 内置解析已可独立工作）' }}</div>
+        </div>
+    </el-dialog>
+</div>
+
+<script src="/vendor/vue.global.prod.js"></script>
+<script src="/vendor/element-plus.full.min.js"></script>
+<script src="/vendor/echarts.min.js"></script>
+<script src="/app.js?v=13"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
